@@ -209,9 +209,9 @@ static int alignto(const double interval, const double tolerance,
                    double * top, double * bot)
 {
   const double botin = *bot, topin = *top;
-  const double binspacing = (*top - *bot)/HEIGHT;
-  if(interval > binspacing &&
-     interval < binspacing + interval*tolerance){
+  const double rawlineheight = (*top - *bot)/HEIGHT;
+  if(interval > rawlineheight &&
+     interval < rawlineheight + interval*tolerance){
     const double center = roundto((*top + *bot)/2, interval);
     const double tenttop = center + interval*HEIGHT/2.0;
     const double tentbot = center - interval*HEIGHT/2.0;
@@ -220,23 +220,26 @@ static int alignto(const double interval, const double tolerance,
     *bot = tentbot;
     *top = tentbot + HEIGHT*interval;
 
-    // If all values are positive, put the empty space at the top. If
-    // all negative, put it at the bottom. Otherwise center the points.
+    // If all values are positive, put the empty space at the bottom. If
+    // all negative, put it at the top. Otherwise center the points.
     if(botin > 0 && topin > 0){
       while(*top > topin && *bot - interval > 0){
         *bot -= interval;
         *top -= interval;
       }
+      *bot += interval;
+      *top += interval;
     }
     else if(botin < 0 && topin < 0){
       while(*bot < botin && *top + interval < 0){
         *bot += interval;
         *top += interval;
       }
+      *bot -= interval;
+      *top -= interval;
     }
 
-    // This shouldn't happen, but does, i.e. there is a bug above.
-    // When it happens, bail out and return the original limits.
+    // If this happens, there is a bug above.
     if(*top < topin) goto fail;
     if(*bot > botin) goto fail;
 
