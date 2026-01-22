@@ -135,6 +135,7 @@ static int HEIGHT = 21;
 static int MINYLABELWIDTH = 0;
 
 static int alwayscolor = 0;
+static int dosnap = 1;
 static int allow_partial_draw = 1;
 
 static void sigusr1(__attribute__((unused)) int sig)
@@ -308,7 +309,7 @@ static int ranges(double * minx, double * maxx,
   if(*miny == *maxy) (*maxy)++, (*maxy)*=2;
 
   // We only print periodic axis labels for y, so only nicify it
-  nicifytopbot(maxy, miny);
+  if(dosnap) nicifytopbot(maxy, miny);
 
   // Put back whichever values the user specified
   if(reset_minx) *minx = orig_minx;
@@ -558,8 +559,8 @@ void printhelp()
   "  Red:     <= 10000\n"
   "  Magenta: >  10000\n"
   "\n"
-  "Note that a 2x4 cell can have an arbitrarily large count in it and\n"
-  "remain uncolored if not all 8 subcells are filled.\n"
+  "A 2x4 cell can have an arbitrarily large count in it and remain\n"
+  "uncolored if not all 8 subcells are filled.\n"
   "\n"
   "If the output of 2dutf8hist is not a terminal, color is disabled.\n"
   "You can override this by giving \"forcecolor\" as an argument.\n"
@@ -580,9 +581,25 @@ void printhelp()
   "\n"
   "If you give an integer as the second argument, it sets the height.\n"
   "\n"
+  "If you give integers as the third, fourth, fifth, and/or sixth\n"
+  "arguments, these set, respectively, the minimum value of the x-axis,\n"
+  "the maximum x, the minimum y and the maximum y.  This possibly puts\n"
+  "some of the data outside the visible area.\n"
+  "\n"
+  "The preceding six numerical arguments must appear exactly in the\n"
+  "specified positions.  The other arguments can appear anywhere,\n"
+  "including in those positions.  Any of the six numerical arguments\n"
+  "can be omitted by putting another flag in its place.  If you don't\n"
+  "have anything else to put there, put \"noop\" which does nothing.\n"
+  "\n"
   "You may give as an argument the letter 'y' followed by a number,\n"
   "for instance \"y7\". This sets the minimum width of the y axis\n"
   "label.  It will be space padded on the left to meet this minimum.\n"
+  "\n"
+  "Normally 2dutf8hist tries to pick a y-axis range such that there\n"
+  "are sensibly round intervals between rows and the labels look nice.\n"
+  "This usually has the side effect of wasting some space.  To disable\n"
+  "this snapping, give \"nosnap\" as an argument.\n"
   "\n"
   "By default, if 2dutf8hist reads data for more than 3 seconds\n"
   "it starts outputting plots with the data it has so far rather than\n"
@@ -619,18 +636,47 @@ int main(int argc, char ** argv)
     return 0;
   }
 
-  if(argc > 1 && argisnum(argv[1]))
+  int skiparg[8] = { 0 };
+  if(argc > 1 && argisnum(argv[1])){
     userWIDTH  = atoi(argv[1])-MAXYLABELWIDTH-1;
-  if(argc > 2 && argisnum(argv[2]))
+    skiparg[1] = 1;
+  }
+  if(argc > 2 && argisnum(argv[2])){
     HEIGHT = atoi(argv[2])-3;
+    skiparg[2] = 1;
+  }
+
+  double minx = DBL_MAX;
+  double maxx = -DBL_MAX;
+  double miny = DBL_MAX;
+  double maxy = -DBL_MAX;
+  {
+    int errno = 0;
+    double * extremes[4] = { &minx, &maxx, &miny, &maxy };
+    char * endptr;
+    int i;
+    /* Look at third through sixth arguments */
+    for(i = 0; i < 4; i++){
+      int arg = i+3;
+      if(argc <= arg) continue;
+      double val = strtod(argv[arg], &endptr);
+      if(errno == 0 && endptr != argv[arg]){
+        *extremes[i] = val;
+        skiparg[arg] = 1;
+      }
+    }
+  }
 
   {
     int a = 1;
     for(; a < argc; a++){
-      if(!strcmp(argv[a], "forcecolor")) alwayscolor = 1;
+      if(skiparg[a]) continue;
+      if(!strcmp(argv[a], "noop")) /* do nothing */;
+      else if(!strcmp(argv[a], "forcecolor")) alwayscolor = 1;
+      else if(!strcmp(argv[a], "nosnap")) dosnap = 0;
       else if(!strcmp(argv[a], "nopartialdraw")) allow_partial_draw = 0;
       else if(argv[a][0] == 'y') MINYLABELWIDTH = atoi(argv[a] + 1);
-      else if(!argisnum(argv[a]) || a > 2){
+      else{
         fprintf(stderr, "Unrecognized argument %s\n", argv[a]);
         return 1;
       }
@@ -638,11 +684,6 @@ int main(int argc, char ** argv)
   }
 
   signal(SIGUSR1, sigusr1);
-
-  double minx = argc > 4? strtod(argv[4], NULL):  DBL_MAX;
-  double maxx = argc > 5? strtod(argv[5], NULL): -DBL_MAX;
-  double miny = argc > 6? strtod(argv[6], NULL):  DBL_MAX;
-  double maxy = argc > 7? strtod(argv[7], NULL): -DBL_MAX;
 
   /* Let's consider this a valid request, I suppose, and return success */
   if(HEIGHT < 1) return 0;
