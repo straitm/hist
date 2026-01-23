@@ -38,7 +38,7 @@
 
 static int ascii = 0;
 
-// For multiple series 
+// For multiple series
 static char * markers[MAXLIST] = {
 "+", "*", "#", "=", "O",
 "%", "&", "~", "X", "\"",
@@ -367,7 +367,7 @@ static void mkhist(double minx, double maxx, double miny,
 
   for(i = 0; i < MAXLIST; i++){
     const struct clist * L = list[i];
-    if(L == NULL || L->next == NULL) return;
+    if(L == NULL || L->next == NULL) continue;
     do{
       /* binsx(y)-1 so that values equal to the maximum go in the top
          bin and not out of range.  Important when plotting integer
@@ -430,12 +430,12 @@ static char * reallydraw(char * printbuf, double *** hist,
               printcode |= 1 << (rowbin + BINSPERROW*colbin);
             }
             sum += hist[histi][binx][biny];
-
-            // all bins in the character must have at least one entry for
-            // us to color it.  Only check the first histogram, because
-            // if there is more than one, this isn't what color is used for.
-            if(hist[0][binx][biny] == 0) colorok = 0;
           }
+
+          // all bins in the character must have at least one entry for
+          // us to color it.  Only check the first histogram, because
+          // if there is more than one, this isn't what color is used for.
+          if(hist[0][binx][biny] == 0) colorok = 0;
         }
       }
 
@@ -464,7 +464,7 @@ static char * reallydraw(char * printbuf, double *** hist,
       // If in ASCII mode without color, can't use different symbols both to
       // indicate bin contents in the primary series and to indicate multiple
       // series, so force the primary series to always be the same symbol.
-      if(!colorbynumber && !isatty(1) && !alwayscolor && ascii) 
+      if(!colorbynumber && !isatty(1) && !alwayscolor && ascii)
         printbuf += sprintf(printbuf, "%s",
                             printcode?markers[whichlist]:" ");
 
@@ -504,11 +504,16 @@ static void draw(struct clist ** list, double minx, double maxx,
 
   const int ylabelwidth = findylabelwidth(miny, maxy);
 
+  int i;
+  int colorbynumber = 1;
+  for(i = 1; i < MAXLIST; i++)
+    if(!(list[i] != NULL && list[i]->next != NULL))
+      colorbynumber = 0;
+
   char * bufptr = reallydraw(printbuf, hist, ylabelwidth, miny, maxy,
-                             !(list[1] != NULL && list[1]->next != NULL));
+                             colorbynumber);
 
   const int ynwidth = sprintf(tempbuf, "%g", miny);
-  int i;
   for(i = 0; i < ylabelwidth-ynwidth; i++) bufptr+=sprintf(bufptr, " ");
   bufptr += sprintf(bufptr, ascii?"%g+":"%g┼", miny);
   for(i = 0; i < WIDTH-1; i++) bufptr += sprintf(bufptr, ascii?"-":"─");
@@ -698,7 +703,7 @@ int main(int argc, char ** argv)
 
   unsigned int linen = 0;
   int lasttime = time(NULL);
-  
+
   char * line;
   size_t linelength = 0;
   while(getline(&line, &linelength, stdin) != -1){
@@ -706,7 +711,8 @@ int main(int argc, char ** argv)
     if(!strcmp(line, "newseries\n")){
       listnow++;
       if(listnow >= MAXLIST){
-        fprintf(stderr,"Too many series, stopped at line %u\n",linen);
+        fprintf(stderr, "Too many series, max %d, stopped at line %u\n",
+                MAXLIST, linen);
         break;
       }
       list[listnow] = malloc(sizeof(struct clist));
@@ -717,7 +723,8 @@ int main(int argc, char ** argv)
     }
 
     if(2 != sscanf(line, "%lf %lf", &xin, &yin)){
-      fprintf(stderr, "Bad line:\n%s\nStopping here\n", line);
+      fprintf(stderr, "Line %u is bad:\n%s\nStopping here\n",
+              linen, line);
       break;
     }
 
